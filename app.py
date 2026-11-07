@@ -49,7 +49,6 @@ st.markdown(
         direction: ltr;
         unicode-bidi: isolate;
     }
-
     </style>
     """,
     unsafe_allow_html=True
@@ -63,9 +62,17 @@ st.markdown(
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
+if "pending_question" not in st.session_state:
+    st.session_state.pending_question = None
+
 
 def clear_chat():
     st.session_state.messages = []
+    st.session_state.pending_question = None
+
+
+def set_suggested_question(question):
+    st.session_state.pending_question = question
 
 
 # ==========================================
@@ -108,20 +115,20 @@ with st.sidebar:
         "ما المتطلب السابق لمساق COMP336؟",
         "كم عدد ساعات خطة علم الحاسوب؟",
         "ما هي شروط الإنذار الأكاديمي؟",
-        "ما هي شروط التخرج من الجامعة؟"
+        "ما هي شروط التخرج من الجامعة؟",
+        "How many credit hours are required for Computer Science?"
     ]
 
     for index, suggested_question in enumerate(
         suggested_questions
     ):
-        if st.button(
+        st.button(
             suggested_question,
             key=f"suggested_{index}",
+            on_click=set_suggested_question,
+            args=(suggested_question,),
             use_container_width=True
-        ):
-            st.session_state.pending_question = (
-                suggested_question
-            )
+        )
 
 
 # ==========================================
@@ -129,7 +136,6 @@ with st.sidebar:
 # ==========================================
 
 for message in st.session_state.messages:
-
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
@@ -142,10 +148,9 @@ typed_question = st.chat_input(
     "اكتب سؤالك الأكاديمي هنا..."
 )
 
-pending_question = st.session_state.pop(
-    "pending_question",
-    None
-)
+pending_question = st.session_state.pending_question
+
+st.session_state.pending_question = None
 
 question = typed_question or pending_question
 
@@ -160,6 +165,14 @@ if question:
 
     if question:
 
+        # Capture previous conversation BEFORE
+        # adding the current question.
+        previous_history = [
+            message.copy()
+            for message in st.session_state.messages
+        ]
+
+        # Add the student's new question.
         st.session_state.messages.append({
             "role": "user",
             "content": question
@@ -176,7 +189,12 @@ if question:
 
                 try:
 
-                    answer = ask_rag(question)
+                    # History-aware RAG:
+                    # Previous messages are sent separately.
+                    answer = ask_rag(
+                        question,
+                        history=previous_history
+                    )
 
                 except Exception as error:
 
@@ -191,10 +209,16 @@ if question:
                         "يرجى المحاولة مرة أخرى."
                     )
 
+                    # Remove the unanswered question
+                    # so it does not pollute history.
+                    st.session_state.messages.pop()
+
                     st.stop()
 
             st.markdown(answer)
 
+        # Store the assistant response for
+        # the next follow-up question.
         st.session_state.messages.append({
             "role": "assistant",
             "content": answer
