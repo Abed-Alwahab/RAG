@@ -1,10 +1,21 @@
 
+from collections import Counter
+
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from ingest import load_pdfs
+
+
+# ==========================================
+# CONFIGURATION
+# ==========================================
 
 CHUNK_SIZE = 800
 CHUNK_OVERLAP = 150
 
+
+# ==========================================
+# CREATE CHUNKS
+# ==========================================
 
 def create_chunks():
     documents = load_pdfs()
@@ -12,7 +23,13 @@ def create_chunks():
     splitter = RecursiveCharacterTextSplitter(
         chunk_size=CHUNK_SIZE,
         chunk_overlap=CHUNK_OVERLAP,
-        separators=["\n\n", "\n", "،", " ", ""]
+        separators=[
+            "\n\n",
+            "\n",
+            "،",
+            " ",
+            ""
+        ]
     )
 
     chunks = []
@@ -26,6 +43,11 @@ def create_chunks():
         pieces = splitter.split_text(text)
 
         for index, piece in enumerate(pieces):
+            piece = piece.strip()
+
+            if not piece:
+                continue
+
             chunks.append({
                 "text": piece,
                 "source": doc["source"],
@@ -37,13 +59,25 @@ def create_chunks():
     return chunks
 
 
+# ==========================================
+# TEST
+# ==========================================
+
 if __name__ == "__main__":
     chunks = create_chunks()
 
-    print("Total chunks:", len(chunks))
+    print("\n" + "=" * 50)
+    print("CHUNKING RESULTS")
+    print("=" * 50)
 
-    sources = sorted(set(c["source"] for c in chunks))
+    print(f"Total chunks: {len(chunks)}")
 
-    for source in sources:
-        count = sum(c["source"] == source for c in chunks)
+    counts = Counter(
+        chunk["source"]
+        for chunk in chunks
+    )
+
+    for source, count in sorted(counts.items()):
         print(f"{source}: {count} chunks")
+
+    print("=" * 50)
